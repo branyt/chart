@@ -1,0 +1,552 @@
+
+
+import android.content.Context;
+import android.content.res.TypedArray;
+import android.graphics.Canvas;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Point;
+import android.graphics.RectF;
+import android.graphics.Shader;
+import android.support.annotation.Nullable;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+
+import com.okk.myapplication.R;
+import com.okk.myapplication.utils.GradientColor;
+import com.okk.myapplication.utils.NumberUtils;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+//addRect(float left, float top, float right, float bottom, Path.Direction dir)
+// x轴正数 y轴负数 左下坐标 左上坐标 右上坐标 右下坐标 绘制方向-顺时针、逆时针
+
+//RectF参数(left,top, right, bottom) 绘制矩形 width = right -left; height = bottom - top；
+// left、right在x轴的开始、截止坐标。top、bottom在y轴的开始、截止坐标
+// 贝塞尔曲线：是用一系列点来控制曲线状态。这些点简单分为两类：
+// 一数据点。确定曲线的起始和结束的位置
+// 控制点。确定曲线的弯曲程度
+
+
+//Point、PointF 最简单的结构，代表一个点
+//Android中的坐标系跟数学中平面坐标系不同，x轴正向右，x轴负向左。y轴正向下，y轴负向上。坐标轴原点位于左上角
+//PointF与Point不同x、y值是float型
+
+
+public class CustomerLine extends View {
+    //绘制开关
+    private boolean switch_Chart;
+
+
+    private Path mCurvePath;
+
+
+    private Paint mXPaint;
+    private Paint mYPaint;
+    private Paint mCurvePaint;
+
+    private Paint mFillPaint;
+    private Path mFillPath;
+    private GradientColor gradientColor;
+
+    private Paint mYTextPaint;
+    private Paint mXTextPaint;
+
+    private float y_width;
+    private float y_text_size;
+    private float y_text_margin;
+    private float y_text_width;
+    //减去y轴文字大小边距后 坐标新的原点
+    private float start_x_y = 0f;
+
+    private float x_width;
+    private float x_text_size;
+    private float x_text_margin;
+    //除去x轴底部文字和间距 y轴新的坐标起始点
+    private float start_y_x = 0f;
+
+    private float curve_width;
+    private int curve_color;
+
+    private int width, height;
+
+    //根据y显示的数据取出最大值
+    private float maxHeight;
+    //根据x显示的数据求出总数据个数
+    private int maxWidth;
+
+    //x 展示的数据，根据数据去绘制x轴
+    private List<String> xLists;
+    //y 展示的数据，根据数据去绘制y轴
+    private List<Double> pointsY;
+
+    //y轴兑换view高度的比例值
+    private float avgY;
+    //view高度px与数值一比一的比例兑换
+    private float base_avgY;
+
+    //x轴的开始点、结束点
+    private float avgX;
+    //view宽度px与数值一比一的比例兑换
+    private float base_avgX;
+    private float startX = 0, endX = 0;
+
+    //分割线
+    private Paint mSPaint;
+    private int split_color;
+    private float split_width;
+
+    //touch十字线
+    private Paint mCrossPaint;
+    private int cross_color;
+    private float cross_width;
+    private boolean bool_cross = false;
+    private int currentX;
+
+    //market
+    private Paint marketPaint;
+    private Paint textPaint;
+    private float market_text_size;
+
+    /**
+     * 坐标轴 所有点坐标
+     */
+    private Point[] points;
+    //允许误差范围 px
+    private float allow_width = 0;
+
+    private List<String> mTexts;
+    private float market_width,market_height;
+
+    private boolean open_x, open_y;
+
+    public interface OnTouchClickListener  {
+        void onTouchClick(int position);
+    }
+
+    private OnTouchClickListener mOnTouchClickListener;
+
+    public void setOnTouchClickListener(OnTouchClickListener onTouchClickListener) {
+        this.mOnTouchClickListener = onTouchClickListener;
+    }
+
+    public CustomerLine(Context context) {
+        this(context, null);
+    }
+
+    public CustomerLine(Context context, @Nullable AttributeSet attrs) {
+        this(context, attrs, 0);
+    }
+
+    public CustomerLine(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init(context, attrs);
+    }
+
+    private void init(Context context, AttributeSet attrs) {
+        TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.lineStyle);
+        switch_Chart = typedArray.getBoolean(R.styleable.lineStyle_switch_chart, false);
+        maxWidth = typedArray.getInteger(R.styleable.lineStyle_max_width,1);
+        maxHeight = typedArray.getFloat(R.styleable.lineStyle_max_height, 1);
+
+        open_x = typedArray.getBoolean(R.styleable.lineStyle_open_x, true);
+        open_y = typedArray.getBoolean(R.styleable.lineStyle_open_y, true);
+        bool_cross = typedArray.getBoolean(R.styleable.lineStyle_open_cross, false);
+
+        x_width = typedArray.getDimension(R.styleable.lineStyle_x_width, 5f);
+        x_text_size = typedArray.getDimensionPixelSize(R.styleable.lineStyle_x_text_size, 36);
+        x_text_margin = typedArray.getDimension(R.styleable.lineStyle_x_text_margin, 20f);
+
+        curve_width = typedArray.getDimension(R.styleable.lineStyle_curve_width, 5f);
+        curve_color = typedArray.getColor(R.styleable.lineStyle_curve_color,
+                getResources().getColor(R.color.color2866FE));
+        gradientColor = new GradientColor(getResources().getColor(R.color.color4D2866FE),
+                getResources().getColor(R.color.color002866FE));
+
+        y_width = typedArray.getDimension(R.styleable.lineStyle_y_width, 3f);
+        //大小 单位：Px
+        y_text_size = typedArray.getDimensionPixelSize(R.styleable.lineStyle_y_text_size, 36);
+        y_text_margin = typedArray.getDimension(R.styleable.lineStyle_y_text_margin, 20);
+        y_text_width = typedArray.getDimension(R.styleable.lineStyle_y_text_width, 52f);
+
+        split_color = typedArray.getColor(R.styleable.lineStyle_split_line_color, getResources().getColor(R.color.colorDDE6F5));
+        split_width = typedArray.getDimension(R.styleable.lineStyle_split_line_width, 1f);
+
+        cross_color = typedArray.getColor(R.styleable.lineStyle_cross_color,
+                getResources().getColor(R.color.color2866FE));
+        cross_width = typedArray.getDimension(R.styleable.lineStyle_cross_width, 2f);
+
+        allow_width = typedArray.getDimension(R.styleable.lineStyle_allow_width, 10f);
+
+        market_height = typedArray.getDimension(R.styleable.lineStyle_market_height, 100f);
+        market_width = typedArray.getDimension(R.styleable.lineStyle_market_width, 200f);
+
+        market_text_size = typedArray.getDimension(R.styleable.lineStyle_market_text_size, 32f);
+
+        mCrossPaint = new Paint();
+        mCrossPaint.setStyle(Paint.Style.STROKE);
+        mCrossPaint.setColor(cross_color);
+        mCrossPaint.setStrokeWidth(cross_width);
+
+        mXPaint = new Paint();
+        mXPaint.setColor(getResources().getColor(R.color.colorDDE6F5));
+        mXPaint.setStyle(Paint.Style.STROKE);
+        mXPaint.setStrokeWidth(x_width);
+
+        mCurvePaint = new Paint();
+        mCurvePaint.setStyle(Paint.Style.STROKE);
+        mCurvePaint.setStrokeWidth(curve_width);
+        mCurvePaint.setColor(curve_color);
+        mCurvePath = new Path();
+
+        mYPaint = new Paint();
+        mYPaint.setColor(getResources().getColor(R.color.colorDDE6F5));
+        mYPaint.setStyle(Paint.Style.STROKE);
+        mYPaint.setStrokeWidth(y_width);
+
+        mYTextPaint = new Paint();
+        mYTextPaint.setColor(getResources().getColor(R.color.color95A3C1));
+        mYTextPaint.setTextSize(y_text_size);
+        mYTextPaint.setTextAlign(Paint.Align.RIGHT);
+
+        mXTextPaint = new Paint();
+        mXTextPaint.setColor(getResources().getColor(R.color.color95A3C1));
+        mXTextPaint.setTextSize(x_text_size);
+
+        mSPaint = new Paint();
+        mSPaint.setColor(split_color);
+        mSPaint.setStrokeWidth(split_width);
+        mSPaint.setStyle(Paint.Style.STROKE);
+
+        textPaint =new Paint();
+        textPaint.setColor(getResources().getColor(R.color.colorFFFFFF));
+        textPaint.setTextSize(market_text_size);
+
+        marketPaint = new Paint();
+        marketPaint.setStyle(Paint.Style.FILL);
+        marketPaint.setColor(getResources().getColor(R.color.colorF7A23A));
+
+        mFillPaint = new Paint();
+        mFillPaint.setStyle(Paint.Style.FILL);
+        mFillPath = new Path();
+
+        typedArray.recycle();
+    }
+
+    public void setOpen_X (boolean x) {
+        this.open_x = x;
+    }
+
+    public void setOpen_y (boolean y) {
+        this.open_y = y;
+    }
+
+    public void setOpenCross (boolean cross) {
+        this.bool_cross = cross;
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        if (switch_Chart) {
+            canvas.translate(0, height);
+            onDrawY(canvas);
+            onDrawX(canvas);
+            onDrawCurve(canvas);
+            if (bool_cross) {
+                onTouchMove(canvas);
+            }
+        }
+    }
+
+    private void onTouchMove(Canvas canvas) {
+        if (points == null || points.length == 0
+                || mTexts == null || mTexts.size() == 0) {
+            return;
+        }
+
+        if (points.length != mTexts.size()) {
+            return;
+        }
+        int index = (int) (currentX / avgX);
+        if (index <= 0) {
+            index = 0;
+        }
+        float minCurrent = currentX - allow_width;
+        float maxCurrent = currentX + allow_width;
+
+        if (points[index].x >= minCurrent && points[index].x <= maxCurrent) {
+            canvas.drawLine(points[index].x, -start_y_x, points[index].x, -height, mCrossPaint);
+
+            String text = mTexts.get(index);
+
+            if (width - currentX >= market_width) {
+                drawRightMarket(canvas, points[index], text);
+            } else {
+                drawLeftMarket(canvas, points[index], text);
+            }
+
+            if (mOnTouchClickListener != null) {
+                mOnTouchClickListener.onTouchClick(index);
+            }
+        }
+    }
+
+    public void setData(List<String> mList) {
+        if (mList == null || mList.size() == 0) {
+            mTexts = new ArrayList<>();
+            return;
+        }
+        this.mTexts = mList;
+    }
+
+    private void drawRightMarket(Canvas canvas, Point point, String text) {
+        RectF rectF = new RectF(point.x, point.y + market_height / 2,
+                point.x + market_width, point.y - market_height / 2);
+        canvas.drawRoundRect(rectF, 8,8,marketPaint);
+
+        canvas.drawText(text, point.x, point.y, textPaint);
+    }
+
+    private void drawLeftMarket(Canvas canvas, Point point, String text) {
+        RectF rectF = new RectF(point.x, point.y + market_height / 2,
+                point.x - market_width, point.y  - market_height / 2);
+        canvas.drawRoundRect(rectF, 8,8,marketPaint);
+
+        canvas.drawText(text, -point.x, point.y, textPaint);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        currentX = (int) event.getX();
+        if (event.getAction() == MotionEvent.ACTION_DOWN
+        || event.getAction() == MotionEvent.ACTION_MOVE) {
+            if (bool_cross) {
+                invalidate();
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 所有数据准备后，调用 开始绘制view
+     * @param switch_Chart
+     */
+    public void setChart(boolean switch_Chart) {
+        this.switch_Chart = switch_Chart;
+        invalidate();
+    }
+
+    /**
+     * 绘制Y轴
+     * @param canvas
+     */
+    private void onDrawY (Canvas canvas) {
+        //view的height 总共分成 7 个等分比
+        avgY = (float) height / 7;
+        //避免y轴最大值就是终点位置 所以减去一个等分比 再进行等分比
+        base_avgY = (height - avgY*2) / maxHeight;
+        avgY = (height - avgY) / 6;
+
+
+
+        if (open_y) {
+            start_x_y = y_text_width + y_text_margin;
+            start_y_x = x_text_size + x_text_margin;
+            canvas.drawLine(start_x_y, -start_y_x,start_x_y,-height, mYPaint);
+        }
+
+        float y_text_avg = maxHeight / (float) 6;
+        //为了让最大值 在y轴显示的文字之内
+        y_text_avg = (maxHeight + y_text_avg * 2) / (float) 6;
+        if (y_text_avg <= 1f) {
+            y_text_avg = 1f;
+        }
+
+        if (open_y) {
+            for (int i = 0; i < 6; i ++) {
+                //y轴上显示的文字
+                int y_text = (int) (y_text_avg * i);
+                canvas.drawText(String.valueOf(y_text), start_x_y - y_text_margin,-i*avgY-start_y_x, mYTextPaint);
+            }
+        }
+
+    }
+
+    /**
+     * 绘制X轴
+     * @param canvas
+     */
+    private void onDrawX(Canvas canvas) {
+        avgX = (float) width / (float) maxWidth;
+        avgX = (float)width / (float) maxWidth;
+        base_avgX = (float)width / (float) maxWidth;
+        if (open_x) {
+            startX = start_x_y;
+            canvas.drawLine(startX, -start_y_x,width, -start_y_x, mXPaint);
+
+            if (xLists.size() <= 7) {
+                for (int i = 0 ;i < xLists.size(); i ++) {
+                    if (i == 0) {
+                        startX = start_x_y;
+                        endX = 1 * avgX;
+                    } else {
+                        startX = (i-1) * avgX;
+                        endX = i * avgX;
+                    }
+                    float text_width = mXTextPaint.measureText(xLists.get(i));
+                    canvas.drawText(xLists.get(i), start_x_y + i * avgX- text_width/ 2, 0, mXTextPaint);
+                }
+            } else {
+                for (int i = 0 ;i < xLists.size(); i ++) {
+                    if (i == 0) {
+                        startX = start_x_y;
+                        endX = 1 * avgX;
+                    } else {
+                        startX = (i-1) * avgX;
+                        endX = i * avgX;
+                    }
+
+                    if (i%2 == 0) {
+                        float text_width = mXTextPaint.measureText(xLists.get(i));
+                        canvas.drawText(xLists.get(i), start_x_y + i * avgX - text_width/ 2, 0, mXTextPaint);
+                    }
+
+                }
+            }
+
+        }
+    }
+
+
+    /**
+     * 绘制曲线
+     * @param canvas
+     * i*avgX, -pointsY.get(i) * avgY
+     */
+    private void onDrawCurve(Canvas canvas) {
+        if (open_x == false) {
+            start_x_y = 0;
+        }
+
+        if (open_y == false) {
+            start_y_x = curve_width;
+        }
+
+        points = new Point[xLists.size()];
+        for (int i =0; i < xLists.size(); i ++) {
+            Point point = new Point();
+            point.x = (int) (start_x_y + i * base_avgX);
+            point.y = (int) (-pointsY.get(i)*base_avgY-start_y_x);
+            points[i] = point;
+        }
+
+
+
+        Point pStart;
+        Point pEnd;
+        Shader mShader;
+        for (int i = 0; i < points.length - 1; i ++) {
+
+            pStart = points[i];
+            pEnd = points[i+1];
+
+            int base = (pStart.x + pEnd.x) / 2;
+
+            Point cp1 = new Point();
+            Point cp2 = new Point();
+            cp1.y = pStart.y;
+            cp1.x = base;
+
+            cp2.y = pEnd.y;
+            cp2.x = base;
+            mCurvePath.reset();
+            mCurvePath.moveTo(pStart.x, pStart.y);
+            mCurvePath.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, pEnd.x, pEnd.y);
+
+            mFillPath.reset();
+
+            mFillPath.moveTo(pStart.x, pStart.y);
+            mFillPath.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, pEnd.x, pEnd.y);
+            mFillPath.lineTo(pEnd.x, -start_y_x);
+            mFillPath.lineTo(pStart.x, -start_y_x);
+
+            mShader =  new LinearGradient(pStart.x,-start_y_x,pStart.x,height,
+                    gradientColor.getStartColor(), gradientColor.getEndColor(),
+                    Shader.TileMode.REPEAT);
+
+            mFillPaint.setShader(mShader);
+            canvas.drawPath(mFillPath, mFillPaint);
+
+            canvas.drawPath(mCurvePath, mCurvePaint);
+
+            //绘制默认分割线
+            if (bool_cross) {
+                canvas.drawLine(pEnd.x, -start_y_x,pEnd.x, -height, mSPaint);
+            }
+
+
+        }
+    }
+
+    public void setCurve_width (float curve_width) {
+        this.curve_width = curve_width;
+        mCurvePaint.setStrokeWidth(curve_width);
+    }
+
+    public void setCurveColor(int color) {
+        this.curve_color = color;
+        mCurvePaint.setColor(curve_color);
+    }
+
+    public void setGradientColor (GradientColor gradientColor) {
+        this.gradientColor = gradientColor;
+    }
+
+
+    /**
+     * x轴显示文字 并获取到x轴全部要显示的个数
+     * @param stringList
+     */
+    public void setXLists (List<String> stringList) {
+        if (stringList == null) {
+            this.xLists = new ArrayList<>();
+        }
+        this.xLists = stringList;
+        maxWidth = this.xLists.size();
+    }
+
+    /**
+     * y轴包含的坐标点
+     * @param integers y轴中 所有int值集合
+     */
+    public void setYPoints(List<Double> integers) {
+        if (integers == null) {
+            integers = new ArrayList<>();
+        }
+        this.pointsY = integers;
+        if (pointsY != null && pointsY.size() > 1) {
+            maxHeight = Float.parseFloat(NumberUtils.format(Collections.max(integers),2));
+        }
+
+    }
+
+    /**
+     * 获取view的宽高
+     * @param w
+     * @param h
+     * @param oldw
+     * @param oldh
+     */
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        width = w;
+        height = h;
+    }
+}
