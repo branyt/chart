@@ -1,0 +1,37 @@
+<declare-styleable name="lineStyle">
+        <attr name="switch_chart" format="boolean"></attr>
+
+
+        <attr name="y_width" format="dimension"></attr>
+        <attr name="y_text_size" format="dimension"></attr>
+        <attr name="y_text_margin" format="dimension"></attr>
+        <attr name="y_text_width" format="dimension"></attr>
+
+        <attr name="x_width" format="dimension"></attr>
+        <attr name="x_text_size" format="dimension"></attr>
+        <attr name="x_text_margin" format="dimension"></attr>
+        //曲线 线宽 线颜色
+        <attr name="curve_width" format="dimension"></attr>
+        <attr name="curve_color" format="color"></attr>
+
+        <attr name="max_width" format="integer"></attr>
+        <attr name="max_height" format="float"></attr>
+
+        <attr name="split_line_color" format="color"></attr>
+        <attr name="split_line_width" format="dimension"></attr>
+        //十字线 线宽 线颜色
+        <attr name="cross_width" format="dimension"></attr>
+        <attr name="cross_color" format="color"></attr>
+         //点击区域
+        <attr name="allow_width" format="dimension"> </attr>
+        //点击展示的弹出框
+        <attr name="market_width" format="dimension"></attr>
+        <attr name="market_height" format="dimension"></attr>
+        <attr name="market_text_size" format="dimension"></attr>
+        //是否绘制x轴
+        <attr name="open_x" format="boolean"></attr>
+        //是否绘制y轴
+        <attr name="open_y" format="boolean"></attr>
+        //是否绘制点击时的十字线
+        <attr name="open_cross" format="boolean"></attr>
+    </declare-styleable>
